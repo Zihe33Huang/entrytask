@@ -41,7 +41,7 @@ func (server *Server) serveConn(conn io.ReadWriteCloser) {
 			if req == nil {
 				break // it's not possible to recover, so close the connection
 			}
-			req.argv = reflect.ValueOf("error")
+			req.header.Error = err.Error()
 			server.sendResponse(conn, req, sending)
 			continue
 		}
@@ -54,17 +54,21 @@ func (server *Server) serveConn(conn io.ReadWriteCloser) {
 }
 
 func (server *Server) readRequest(conn io.ReadWriteCloser) (*request, error) {
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
+	// 1. unpack message
+	messageBuf, err := unpackMessage(conn)
 	if err != nil {
-		log.Printf("read request error: %v", err)
-	}
-	pbReq := pb.Request{}
-	err = proto.Unmarshal(buffer[:n], &pbReq)
-	if err != nil {
-		log.Printf("read request unmarshal error: %v", err)
+		log.Println("rpc server: unpackMessage error:", err)
+		return nil, err
 	}
 
+	// 2.
+	pbReq := pb.Request{}
+	err = proto.Unmarshal(messageBuf, &pbReq)
+	if err != nil {
+		log.Printf("rpc server: read request unmarshal error: %v", err)
+	}
+
+	// 3. prepare request
 	req := &request{header: pbReq.Hearder}
 	req.svc, req.mtype, err = server.findService(req.header.ServiceMethod)
 	if err != nil {
@@ -79,7 +83,7 @@ func (server *Server) readRequest(conn io.ReadWriteCloser) (*request, error) {
 	}
 	message, ok := argvi.(proto.Message)
 	if !ok {
-		log.Panicln("the message is not a proto.Message")
+		log.Panicln("rpc server: the message is not a proto.Message")
 	}
 	pbReq.Args.UnmarshalTo(message)
 	return req, nil
@@ -90,6 +94,7 @@ func (server *Server) handleRequest(conn io.ReadWriteCloser, req *request, sendi
 	defer wg.Done()
 	err := req.svc.call(req.mtype, req.argv, req.replyv)
 	if err != nil {
+		req.header.Error = err.Error()
 		server.sendResponse(conn, req, sending)
 		return
 	}
@@ -117,18 +122,24 @@ func (server *Server) sendResponse(conn io.ReadWriteCloser, req *request, sendin
 		newAny, err := anypb.New(message)
 		if err != nil {
 			log.Println("protobuf marshal response error:", err)
+			req.header.Error = err.Error()
+		} else {
+			pbResp.Args = newAny
 		}
-		pbResp.Args = newAny
 	} else {
 		log.Println("the message is not a proto.Message")
+		req.header.Error = "you must transfer proto.Message type"
 	}
 
 	marshal, err := proto.Marshal(&pbResp)
 	if err != nil {
-		log.Printf("marshal request error: %v", err)
+		log.Println("marshal request error: %v", err)
+		req.header.Error = "rpc server marshal request error: " + err.Error()
 	}
 
-	_, err = conn.Write(marshal)
+	message := packMessage(marshal)
+
+	_, err = conn.Write(message)
 	if err != nil {
 		log.Printf("write request error: %v", err)
 	}

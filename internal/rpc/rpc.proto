@@ -18,6 +18,7 @@ message Response {
 message Header {
   string service_method = 1;
   uint64 seq = 2;
+  string error = 3;
 }
 
 

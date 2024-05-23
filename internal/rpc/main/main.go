@@ -2,12 +2,10 @@ package main
 
 import (
 	ziherpc "entrytask/internal/rpc"
-	"entrytask/internal/rpc/pb"
 	"fmt"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -38,54 +36,84 @@ func startServer(addr chan string) {
 	ziherpc.Accept(l)
 }
 
+//func main() {
+//	addr := make(chan string)
+//	go startServer(addr)
+//
+//	// in fact, following code is like a simple geerpc client
+//	conn, _ := net.Dial("tcp", <-addr)
+//	defer func() { _ = conn.Close() }()
+//
+//	time.Sleep(time.Second)
+//	// send options
+//	// send request & receive response
+//	for i := 0; i < 5; i++ {
+//		//user := User{Name: "zihe"}
+//		num := Num{Num: 5}
+//		h := &pb.Header{
+//			ServiceMethod: "UserService.Append",
+//			Seq:           uint64(i),
+//		}
+//		a, err := anypb.New(&num)
+//		if err != nil {
+//			log.Println(err.Error())
+//		}
+//
+//		request := pb.Request{
+//			Hearder: h,
+//			Args:    a,
+//		}
+//
+//		//_ = c.Write(h, fmt.Sprintf("geerpc req %d", h.Seq))
+//		//_ = cc.ReadHeader(h)
+//		//var reply string
+//		//_ = cc.ReadBody(&reply)
+//		marshal, err := proto.Marshal(&request)
+//		if err != nil {
+//			log.Println(err.Error())
+//		}
+//		conn.Write(marshal)
+//
+//		buffer := make([]byte, 1024)
+//		n, err := conn.Read(buffer)
+//		if err != nil {
+//			fmt.Println(err.Error())
+//		}
+//		resp := pb.Response{}
+//		proto.Unmarshal(buffer[:n], &resp)
+//		nn := Num{}
+//		resp.Args.UnmarshalTo(&nn)
+//		fmt.Println(nn.Num)
+//	}
+//	fmt.Scanln()
+//}
+
 func main() {
+	log.SetFlags(0)
 	addr := make(chan string)
 	go startServer(addr)
-
-	// in fact, following code is like a simple geerpc client
-	conn, _ := net.Dial("tcp", <-addr)
-	defer func() { _ = conn.Close() }()
+	client, _ := ziherpc.Dial("tcp", <-addr)
+	defer func() {
+		_ = client.Close()
+	}()
 
 	time.Sleep(time.Second)
-	// send options
 	// send request & receive response
-	for i := 0; i < 5; i++ {
-		//user := User{Name: "zihe"}
-		num := Num{Num: 5}
-		h := &pb.Header{
-			ServiceMethod: "UserService.Append",
-			Seq:           uint64(i),
-		}
-		a, err := anypb.New(&num)
-		if err != nil {
-			log.Println(err.Error())
-		}
-
-		request := pb.Request{
-			Hearder: h,
-			Args:    a,
-		}
-
-		//_ = c.Write(h, fmt.Sprintf("geerpc req %d", h.Seq))
-		//_ = cc.ReadHeader(h)
-		//var reply string
-		//_ = cc.ReadBody(&reply)
-		marshal, err := proto.Marshal(&request)
-		if err != nil {
-			log.Println(err.Error())
-		}
-		conn.Write(marshal)
-
-		buffer := make([]byte, 1024)
-		n, err := conn.Read(buffer)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		resp := pb.Response{}
-		proto.Unmarshal(buffer[:n], &resp)
-		nn := Num{}
-		resp.Args.UnmarshalTo(&nn)
-		fmt.Println(nn.Num)
+	var wg sync.WaitGroup
+	for i := 0; i < 1; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			args := &User{
+				Name: "zzihe",
+			}
+			replyUser := User{}
+			fmt.Println("client send")
+			if err := client.Call("UserService.AppendUser", args, &replyUser); err != nil {
+				log.Fatal("Call UserService.AppendUser error:", err)
+			}
+			log.Println("reply:", replyUser.Name)
+		}(i)
 	}
-	fmt.Scanln()
+	wg.Wait()
 }
