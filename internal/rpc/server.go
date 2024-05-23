@@ -3,7 +3,6 @@ package ziherpc
 import (
 	"entrytask/internal/rpc/pb"
 	"errors"
-	"fmt"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"io"
@@ -42,7 +41,8 @@ func (server *Server) serveConn(conn io.ReadWriteCloser) {
 			if req == nil {
 				break // it's not possible to recover, so close the connection
 			}
-			server.sendResponse(conn, &pbReq, sending)
+			req.argv = reflect.ValueOf("error")
+			server.sendResponse(conn, req, sending)
 			continue
 		}
 
@@ -73,6 +73,7 @@ func (server *Server) readRequest(conn io.ReadWriteCloser) (*request, error) {
 	req.argv = req.mtype.newArgv()
 	req.replyv = req.mtype.newReplyv()
 	argvi := req.argv.Interface()
+
 	if req.argv.Type().Kind() != reflect.Ptr {
 		argvi = req.argv.Addr().Interface()
 	}
@@ -89,32 +90,44 @@ func (server *Server) handleRequest(conn io.ReadWriteCloser, req *request, sendi
 	defer wg.Done()
 	err := req.svc.call(req.mtype, req.argv, req.replyv)
 	if err != nil {
-		req.header.Error = err.Error()
-		server.sendResponse(conn, nil, sending)
+		server.sendResponse(conn, req, sending)
 		return
 	}
-	rv := req.replyv.Interface()
-	s := rv.(proto.Message)
-	newAny, err := anypb.New(s)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-	pbReq := pb.Request{
-		Hearder: req.header,
-		Args:    newAny,
-	}
-	server.sendResponse(conn, &pbReq, sending)
+	//rv := req.replyv.Interface()
+	//s := rv.(proto.Message)
+	//newAny, err := anypb.New(s)
+	//
+	//if err != nil {
+	//	fmt.Println(err)
+	//}
+	//pbReq := pb.Request{
+	//	Hearder: req.header,
+	//	Args:    newAny,
+	//}
+	server.sendResponse(conn, req, sending)
 }
 
 func (server *Server) sendResponse(conn io.ReadWriteCloser, req *request, sending *sync.Mutex) {
 	sending.Lock()
 	defer sending.Unlock()
 
-	marshal, err := proto.Marshal(req)
+	pbResp := pb.Response{Header: req.header}
+	// if the type of value is proto.Message, i.e. the type is defined in .proto file
+	if message, ok := req.replyv.Interface().(proto.Message); ok {
+		newAny, err := anypb.New(message)
+		if err != nil {
+			log.Println("protobuf marshal response error:", err)
+		}
+		pbResp.Args = newAny
+	} else {
+		log.Println("the message is not a proto.Message")
+	}
+
+	marshal, err := proto.Marshal(&pbResp)
 	if err != nil {
 		log.Printf("marshal request error: %v", err)
 	}
+
 	_, err = conn.Write(marshal)
 	if err != nil {
 		log.Printf("write request error: %v", err)

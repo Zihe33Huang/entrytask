@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+package pb;
+
+option go_package="pb/";
+
+message Num {
+  int32 num = 1;
+}
+
+message User {
+  string name = 1;
+}

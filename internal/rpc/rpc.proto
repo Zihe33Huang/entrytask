@@ -10,14 +10,14 @@ message Request {
   google.protobuf.Any args = 2;
 }
 
+message Response {
+  Header header = 1;
+  google.protobuf.Any args = 2;
+}
+
 message Header {
   string service_method = 1;
   uint64 seq = 2;
-  string error = 3;
 }
 
-message Response {
-  string message = 1;
-  google.protobuf.Any args = 2;
-}
 
