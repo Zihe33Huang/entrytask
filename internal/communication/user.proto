@@ -12,6 +12,33 @@ message LoginRequest {
 
 message LoginResponse {
   bool success = 1;
-  string message = 2;
+  string token = 2;
 }
 
+message AuthRequest {
+  string token = 1;
+}
+
+message AuthResponse {
+  bool success = 1;
+  uint64 userId = 2;
+}
+
+message ProfileRequest {
+  uint64 userId = 1;
+}
+
+message ProfileResponse {
+  string username = 1;
+  string nickname = 2;
+  string profileImg = 3;
+}
+
+message NicknameUpdateRequest {
+  uint64 userId = 1;
+  string nickname = 2;
+}
+
+message NicknameUpdateResponse {
+  bool success = 1;
+}
