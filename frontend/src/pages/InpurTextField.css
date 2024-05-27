@@ -1,0 +1,19 @@
+.nickname {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/*.nickname button {*/
+/*    margin-left: 5em;*/
+/*}*/
+
+.nickname p div {
+    width: 5em;
+}
+
+.nickname button {
+    width: 2em;
+    height: 2em;
+
+}
